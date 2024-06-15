@@ -78,6 +78,32 @@ JVM Version:    1.8.0_211-b12
 JVM Vendor:     Oracle Corporation
 ```
 
-### 二、实战心得
+### 二、实战与心得
 
-![](C:\Users\Administrator\Desktop\Work\自研笔记\images\微信图片_20240513165208.png)
+##### Tomcat部署jsp项目
+
+1. 本服务器是否有mysql相关服务
+2. 如果本地没有数据库服务，则下载epel源，安装mariadb
+3. 启动服务，查看服务状态
+4. 解压项目安装包
+5. 数据库正常启动，导入sql文件
+6. 停止tomcat服务，copy项目包解压后的ROOT目录到tomcat实例的发布目录中
+7. 查看或着修改程序连接数据库的配置文件
+8. 启动tomcat实例并且检查服务的状态（进程、端口）
+
+##### Tomcat多实例部署
+
+1. 停止tomcat实例
+2. copy原有的tomcat实例家目录，并修改目录名称如tomcat02
+3. 修改tomcat02实例中的配置文件里的三个端口，防止端口冲突的问题导致服务启动失败
+4. 进入到tomcat和tomcat02实例的家目录中的bin目录里分别启动不同的tomcaat实例
+5. 查看端口，查看服务进程
+
+##### Nginx反代tomcat多实例
+
+1. 安装nginx
+2. 修改配置文件
+3. 配置upstream和tomcat主机群组
+4. 编写server虚拟主机，并且在location中定义反向代理proxy_pass
+5. 检测nginx配置文件语法，重启服务
+
