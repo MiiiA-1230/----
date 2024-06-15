@@ -669,10 +669,6 @@ docker build -t my_redis_image -f work/docker/redis/my_redis work/docker/redis
 
 数据卷（volume）是一个虚拟目录，指向主机文件系统中的某个目录
 
-![](C:\Users\Administrator\Desktop\Work\自研笔记\images\image-20240512125641645.png)
-
-如图所示将容器的虚拟目录conf、html和主机系统文件目录中的conf、html关联起来就实现了
-
 1、易于修改：即使不进入容器内部也可以通过修改conf、html内的文件来修改容器中的文件
 
 2、数据可复用：当创建了新的容器并需要复用之前的conf、html文件时，可以直接再创建一个数据卷或者修改之前数据卷对容器目录的指向来进行关联，这样就可以将之前的配置映射到新容器的配置中
