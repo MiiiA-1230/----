@@ -85,7 +85,7 @@ nginx-6dc8dbb669-nf5lm   1/1     Running   0          54s   172.16.195.23   k8s-
 **service资源清单编写**
 
 ```yaml
-#>>> kubectl命令行床创建资源
+#>>> kubectl命令行创建资源
 [root@k8s-master01 ~]# kubectl expose deploy  nginx  --port=80   --dry-run=client  -oyaml  > nginx-service.yaml
 
 #>>> 查看生成的资源清单
