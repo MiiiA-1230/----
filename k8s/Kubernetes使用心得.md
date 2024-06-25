@@ -84,6 +84,214 @@ nginx   1/1     Terminating   0          22s
 [root@k8s-master01 ~]# kubectl  describe po nginx
 ```
 
+##### 定向调度
+
+​		在默认情况下，一个Pod在哪个Node节点上运行，是由Scheduler组件采用相应的算法计算出来的，这个过程是不受人工控制的。但在实际使用中，我们想控制某些Pod到达某些节点上，那么就需要使用到Kubernetes对Pod调度的四种方式：
+
+- 自动调度：默认使用，由Scheduler经过一系列的算法计算得出
+- 定向调度：NodeName、NodeSelector
+
+​		精确匹配，必须得有匹配项。如果没有满足条件的Node，那么Pod将不会被运行，即使在集群中还有可用Node列表也不行。
+
+```yaml
+#test01
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx: 1.17.1
+  nodeName: n1#指定调度到n1节点上
+  
+#test02
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.17.1
+  nodeSelector:
+    app: nginx#选择app: nginx的节点，也可以选择其他的node节点的属性
+```
+
+- 亲和度调度：NodeAffinity、PodAffinity、PodAntiAffinity
+
+​		在NodeSelector的基础上进行了拓展，可以通过配置的形式，实现优先选择满足条件的Node进行调度，如果没有，也可以调度到不满足条件的节点上，使调度更加灵活。
+
+###### **NodeAffinity:**
+
+```yaml
+#使用说明：
+pod.spec.affinity.nodeAffinity
+  requiredDuringSchedulingIgnoredDuringExecution:	#Node节点必须满足指定的所有规则才可以，相当于硬限制
+    nodeSelectorTerms	#节点选择列表
+      matchFields	#按节点字段列出的节点选择器要求列表
+      matchExpressions	#按节点标签列出的节点选择器要求列表（推荐）
+        key	#键
+        values	#值
+        #operat or 关系符	#支持Exists,DoesNotExist,In,NotIn,Gt,Lt
+  preferredDuringSchedulingIgnoredDuringExecution	#优先调度到满足指定的规则的Node，相当于软限制
+    preference	#一个节点选择器项，与相应的权重相关联
+      matchFields	#按节点字段列出的节点选择器要求列表
+      matchExpressions	#按节点标签列出的节点选择器要求列表（推荐）
+        key	#键
+        value	#值
+        #operat or 关系符	#支持Exists,DoesNotExist,In,NotIn,Gt,Lt
+    weight	倾向权重，在范围内1-100
+
+
+#关系符使用说明：
+- matchExpressions:
+  - key: nodeenv		#匹配存在标签的key为nodeenv的节点
+    operator: Exists
+  - key: nodeenv		#匹配标签的key为nodeenv，且value是"xxx"或"yyy"的节点
+    operator: In
+    values: ["xxx","yyy"]
+  - key: nodeenv		#匹配标签的key为nodeenv，且value大于"xxx"的节点
+    operator: Gt
+    values: "xxx"
+
+
+#test01
+apiVersion: v1
+kind: Pod
+metadata: 
+  name: nginx
+spec: 
+  containers:
+  - name: nginx
+    image: nginx:1.17.1
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: nodeenv
+            operator: In
+            values: ["xxx","yyy"]
+```
+
+###### PodAffinity:
+
+```yaml
+#使用说明：
+pod.spec.affinity.podAffinity
+  requiredDuringSchedulingIgnoredDuringExecution:	#硬限制
+    namespace	#指定参照pod的namespace
+    topologyKey	#指定调度作用域
+    labelSelector	#标签选择器
+      matchExpressions	#按节点标签列出的节点选择器要求列表(推荐)
+        key	#键
+        values	#值
+        operator	#关系符 支持In，NotIn，Exists，DoesNotExist
+      matchLabels	#指多个matchExpressions映射的内容
+    preferredDuringSchedulingIgnoredDuringExecution	#软限制
+      podAffinityTerm	#选项
+        namespaces
+        topologyKey
+        labelSelector
+          matchExpressions
+            key	#键
+            values	#值
+            operator
+          matchLabels
+      weight 倾向权重，在范围1-100
+      
+
+topologyKey用于指定调度时作用域，例如：
+	如果指定为kubernetes.io/hostname，那就是以Node节点为区分范围
+	如果指定为beta.kubernetes.io/os，则以Node节点的操作系统类型区分
+	
+	
+test02:
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.17.1
+  affinity:
+    podAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+        matchExpressions:
+        - key: podenv
+        operator: In
+        values: ["xxx","yyy"]
+    topologyKey: kubernetes.io/hostname
+```
+
+###### PodAntiAffinity:
+
+```yaml
+#使用说明：
+pod.spec.affinity.podAntiAffinity
+  requiredDuringSchedulingIgnoredDuringExecution:	#硬限制
+    namespace	#指定参照pod的namespace
+    topologyKey	#指定调度作用域
+    labelSelector	#标签选择器
+      matchExpressions	#按节点标签列出的节点选择器要求列表(推荐)
+        key	#键
+        values	#值
+        operator	#关系符 支持In，NotIn，Exists，DoesNotExist
+      matchLabels	#指多个matchExpressions映射的内容
+    preferredDuringSchedulingIgnoredDuringExecution	#软限制
+      podAffinityTerm	#选项
+        namespaces
+        topologyKey
+        labelSelector
+          matchExpressions
+            key	#键
+            values	#值
+            operator
+          matchLabels
+      weight 倾向权重，在范围1-100
+      
+
+#同PodAntiAffinity类似
+
+
+apiVersion: v1
+kind: Pod
+metadata: 
+  name: nginx
+spec:
+  containers: 
+  - name: nginx
+    image: nginx
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecuting:	#硬限制
+      - lableSelector:
+        matchExpressions:	#匹配podenv的值在["pro"]中的标签
+        - key: podenv
+          operator: In
+          values: ["pro"]
+      topologyKey: kubernetes.io/hostname
+```
+
+- **污点（容忍）调度：Taints、Toleration**
+
+​		前面的调度方式都是站在Pod的角度上，通过在Pod上添加属性来确定Pod是否要调度到指定的Node上。而我们也可以站在Node的角度上，通过在Node上添加污点属性，来决定是否允许Pod调度过来。
+
+​		Node被设置上了污点就和Pod之间增加了一层互斥关系，进而拒绝Pod调度进来，甚至可以将已存在的Pod驱逐出去。
+
+污点格式为`key=value:effect`，key和value是污点的标签，effect描述污点的作用，共有三个选项：
+
+effect选项：
+
+- **PreferNoschedule：**尽量不要来，除非没办法
+- **NoSchedule：**新的不要来，旧的不用动
+- **NoExecute：**新的不要来，旧的也得走
+
 ### 二、Deployment
 
 ​		意为无状态资源管理。无状态服务，即用户的交互对服务本身数据不造成影响的服务。
@@ -307,3 +515,30 @@ nginx-6dc8dbb669-w2zh4   1/1     Running   0          2m5s   172.168.40.165   n1
 
 
 ##### Ingress
+
+​		Ingress为Kubernetes集群中的服务提供了入口，可以提供负载均衡、SSL终止和基于名称的虚拟主机，应用的灰度发布等功能；在生产环境中常用的Ingress有Nginx、HAProxy、Istio等。[Ingress](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/#ingress-v1beta1-networking-k8s-io) 公开从集群外部到集群内[服务](https://kubernetes.io/zh-cn/docs/concepts/services-networking/service/)的 HTTP 和 HTTPS 路由。 流量路由由 Ingress 资源上定义的规则控制。提供7层（HTTP和HTTPS）路由功能。
+
+​		Ingress是一种Kubernetes资源，用于将外部流量路由到Kubernetes集群内的服务。与NodePort相比，它提供了更高级别的路由功能和负载平衡，可以根据HTTP请求的路径、主机名、HTTP方法等来路由流量。
+
+​		因此，可以说Ingress是为了弥补NodePort在流量路由方面的不足而生的。使用NodePort，只能将流量路由到一个具体的Service，并且必须使用Service的端口号来访问该服务。但是，使用Ingress，就可以使用自定义域名、路径和其他HTTP头来定义路由规则，以便将流量路由到不同的Service。
+
+1. **「Ingress」**Ingress 是 Kubernetes 中的一个抽象资源，它提供了一种定义应用暴露入口的方法，可以帮助管理员在 Kubernetes 集群中管理多个服务的访问入口，方便用户访问。Ingress资源对象只是一个规范化的API对象，用于定义流量路由规则和 TLS 设置等信息。它本身不会直接处理或转发流量，而是需要配合一个 Ingress 控制器来实现。
+2. **「Ingress Controller」**Ingress 控制器是一个独立的组件，它会监听 Kubernetes API 中的 Ingress 资源变化，并根据定义的路由规则配置负载均衡器、反向代理或其他网络代理，从而实现外部流量的转发。因此，可以将 Ingress 控制器视为 Ingress 资源的实际执行者。
+
+
+
+###### **主流的Ingress Controller**
+
+在 Kubernetes 中，有很多不同的 Ingress 控制器可以选择，例如 Nginx、Traefik、HAProxy、Envoy 等等。不同的控制器可能会提供不同的功能、性能和可靠性，可以根据实际需求来选择合适的控制器。Kubernetes生态系统中有许多不同的Ingress控制器可供选择，其中比较主流的有：
+
+1. Nginx Ingress Controller：基于Nginx的Ingress控制器，提供了广泛的功能和配置选项。
+2. Traefik Ingress Controller：Traefik是一个流行的反向代理和负载均衡器，Traefik Ingress Controller提供了灵活的配置选项和自动发现服务的功能。
+3. Istio Ingress Gateway：Istio是一种服务网格，它提供了基于Envoy代理的Ingress Gateway来管理入站和出站流量。
+4. Contour Ingress Controller：基于Envoy代理的Ingress控制器，具有高度可扩展性和灵活的路由规则。
+5. Kong Ingress Controller：Kong是一个API网关，提供了可扩展的路由和服务管理功能。
+6. Ambassador API Gateway：Ambassador是一个Kubernetes-native API Gateway，提供了自动化的服务发现和路由管理功能。
+
+###### Ingress的部署方式
+
+1. 部署一个独立的 Ingress 控制器 Pod：可以通过将 Ingress 控制器部署为一个独立的 Pod，使用 Kubernetes Service 对其进行负载均衡和暴露服务。
+2. 部署 DaemonSet 类型的 Ingress 控制器：可以通过部署一个 DaemonSet 类型的 Ingress 控制器，使每个节点上都运行一个 Ingress 控制器 Pod，并通过 Kubernetes Service 对其进行负载均衡和暴露服务。
