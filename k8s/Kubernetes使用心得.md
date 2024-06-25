@@ -13,24 +13,24 @@
 
 ​		Pod之间通过dns解析pod名获知pod网络ip来进行通讯，并为Pod的内部容器提供挂载的Volume和ip来进行通讯，这样既简化了密切关联的业务容器之间的通信问题，也很好地解决了它们之间的文件共享问题。
 
-##### **Pod的两种类型：普通及静态**
+**Pod的两种类型：普通及静态**
 
 ​		普通Pod会被自动调度到最适合运行的node节点中，而静态Pod则会固定生成在拥有它yaml文件的特殊目录的Node中，即不被APIserver所通信的Pod容器。
 
-##### 		三种探针
+#### 		三种探针
 
 1. StartupProbe：用于判断Pod容器是否正常启动，属于有且仅有一次检测的探针。在检测成功前会屏蔽其他探针，检测成功后不再进行探测，检测失败则杀死容器并根据配置文件的重启策略重启容器。
 2. LivenessProbe：用于判断Pod容器是否能够正常运行，探测失败则按照预先设定好的重启策略重启容器。
 3. ReadinessProbe：用于判断Pod容器的服务是否能够正常运行，确保只有当容器准备好接受流量时，才会开始接收，保证服务的稳定性和可用性。
 
-##### 		四种探针方式
+#### 		四种探针方式
 
 1. ExecAction：在容器中执行一个命令，如果返回值为0则认为容器健康。
 2. TCPSocketAction：通过TCP连接检测容器内端口是否通畅，如果通畅则认为容器健康。
 3. HTTPGetAction：通过应用程序暴露的API地址来检查程序是否是正常的，如果状态码为200~400之间，则认为容器健康。
 4. gRPC探针：1.24版本后才会开启，专门为检查运行 gRPC 服务的容器的健康状况而设计。它通过 gRPC 协议向应用发送健康检查请求，并期待收到一个标准的响应来判断服务是否健康。
 
-##### PreStop
+#### PreStop
 
 ​		它允许你在容器终止之前运行一个命令或脚本，用于优雅地关闭服务、关闭连接或清理资源。
 
@@ -84,12 +84,13 @@ nginx   1/1     Terminating   0          22s
 [root@k8s-master01 ~]# kubectl  describe po nginx
 ```
 
-##### 定向调度
+#### 定向调度
 
 ​		在默认情况下，一个Pod在哪个Node节点上运行，是由Scheduler组件采用相应的算法计算出来的，这个过程是不受人工控制的。但在实际使用中，我们想控制某些Pod到达某些节点上，那么就需要使用到Kubernetes对Pod调度的四种方式：
 
-- 自动调度：默认使用，由Scheduler经过一系列的算法计算得出
-- 定向调度：NodeName、NodeSelector
+##### 自动调度：默认使用，由Scheduler经过一系列的算法计算得出
+
+##### 定向调度：NodeName、NodeSelector
 
 ​		精确匹配，必须得有匹配项。如果没有满足条件的Node，那么Pod将不会被运行，即使在集群中还有可用Node列表也不行。
 
@@ -120,7 +121,7 @@ spec:
     app: nginx#选择app: nginx的节点，也可以选择其他的node节点的属性
 ```
 
-- 亲和度调度：NodeAffinity、PodAffinity、PodAntiAffinity
+##### 亲和度调度：NodeAffinity、PodAffinity、PodAntiAffinity
 
 ​		在NodeSelector的基础上进行了拓展，可以通过配置的形式，实现优先选择满足条件的Node进行调度，如果没有，也可以调度到不满足条件的节点上，使调度更加灵活。
 
@@ -278,9 +279,9 @@ spec:
       topologyKey: kubernetes.io/hostname
 ```
 
-- **污点（容忍）调度：Taints、Toleration**
+#### **污点（容忍）调度：Taints、Toleration**
 
-​		**污点（Taints）：**
+##### 		**污点（Taints）：**
 
 ​		前面的调度方式都是站在Pod的角度上，通过在Pod上添加属性来确定Pod是否要调度到指定的Node上。而我们也可以站在Node的角度上，通过在Node上添加污点属性，来决定是否允许Pod调度过来。
 
@@ -306,9 +307,7 @@ kubectl taint nodes n1 tag=heima:NoExecute
 kubectl taint nodes n1 tag:NoExecute-
 ```
 
-
-
-​		**容忍（Toleration）：**
+##### 		**容忍（Toleration）：**
 
 ​		上面污点的作用是拒绝Pod容器被调度到Node节点上，但如果就是想将一个Pod容器调度到有污点的Node节点上去时，就需要使用容忍。
 
@@ -482,7 +481,7 @@ Service发布类型共四种：
 - **PROXY**：取决于云服务商是否支持HTTP和实现机制。
 - **SCTP**：从Kubernetes 1.12版本引入，到1.19版本时达到Beta阶段，默认启用。
 
-##### Headless Service的概念和应用
+#### Headless Service的概念和应用
 
 ​		在某些应用场景中，客户端应用不需要通过Kubernetes内置Service实现的负载均衡功能，或者需要自行完成对服务后端各实例的服务发现机制，或者需要自行实现负载均衡功能，此时可以通过创建一种特殊的 名为“Headless”的服务来实现。
 ​		Headless Service的概念是这种服务没有入口访问地址（无ClusterIP 地址），kube-proxy不会为其创建负载转发规则，而服务名（DNS域名）的解析机制取决于该Headless Service是否设置了Label Selector。
@@ -552,9 +551,7 @@ NAME                     READY   STATUS    RESTARTS   AGE    IP               NO
 nginx-6dc8dbb669-w2zh4   1/1     Running   0          2m5s   172.168.40.165   n1     <none>           <none>
 ```
 
-
-
-##### Ingress
+#### Ingress
 
 ​		Ingress为Kubernetes集群中的服务提供了入口，可以提供负载均衡、SSL终止和基于名称的虚拟主机，应用的灰度发布等功能；在生产环境中常用的Ingress有Nginx、HAProxy、Istio等。[Ingress](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/#ingress-v1beta1-networking-k8s-io) 公开从集群外部到集群内[服务](https://kubernetes.io/zh-cn/docs/concepts/services-networking/service/)的 HTTP 和 HTTPS 路由。 流量路由由 Ingress 资源上定义的规则控制。提供7层（HTTP和HTTPS）路由功能。
 
@@ -565,9 +562,7 @@ nginx-6dc8dbb669-w2zh4   1/1     Running   0          2m5s   172.168.40.165   n1
 1. **「Ingress」**Ingress 是 Kubernetes 中的一个抽象资源，它提供了一种定义应用暴露入口的方法，可以帮助管理员在 Kubernetes 集群中管理多个服务的访问入口，方便用户访问。Ingress资源对象只是一个规范化的API对象，用于定义流量路由规则和 TLS 设置等信息。它本身不会直接处理或转发流量，而是需要配合一个 Ingress 控制器来实现。
 2. **「Ingress Controller」**Ingress 控制器是一个独立的组件，它会监听 Kubernetes API 中的 Ingress 资源变化，并根据定义的路由规则配置负载均衡器、反向代理或其他网络代理，从而实现外部流量的转发。因此，可以将 Ingress 控制器视为 Ingress 资源的实际执行者。
 
-
-
-###### **主流的Ingress Controller**
+##### **主流的Ingress Controller**
 
 在 Kubernetes 中，有很多不同的 Ingress 控制器可以选择，例如 Nginx、Traefik、HAProxy、Envoy 等等。不同的控制器可能会提供不同的功能、性能和可靠性，可以根据实际需求来选择合适的控制器。Kubernetes生态系统中有许多不同的Ingress控制器可供选择，其中比较主流的有：
 
@@ -578,7 +573,46 @@ nginx-6dc8dbb669-w2zh4   1/1     Running   0          2m5s   172.168.40.165   n1
 5. Kong Ingress Controller：Kong是一个API网关，提供了可扩展的路由和服务管理功能。
 6. Ambassador API Gateway：Ambassador是一个Kubernetes-native API Gateway，提供了自动化的服务发现和路由管理功能。
 
-###### Ingress的部署方式
+##### Ingress的两种部署方式
 
 1. 部署一个独立的 Ingress 控制器 Pod：可以通过将 Ingress 控制器部署为一个独立的 Pod，使用 Kubernetes Service 对其进行负载均衡和暴露服务。
 2. 部署 DaemonSet 类型的 Ingress 控制器：可以通过部署一个 DaemonSet 类型的 Ingress 控制器，使每个节点上都运行一个 Ingress 控制器 Pod，并通过 Kubernetes Service 对其进行负载均衡和暴露服务。
+
+###### 补记：使用HELM方式安装，并学习使用HELM服务
+
+###### 使用YAML方式安装
+
+```bash
+wget https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.6.4/deploy/static/provider/cloud/deploy.yaml
+mv deploy.yaml ingress-nginx-controller.yaml 
+kubectl apply -f ingress-nginx-controller.yaml
+# 或者直接
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.6.4/deploy/static/provider/cloud/deploy.yaml
+```
+
+注意，可能会应网络问题无法拉取相关镜像，可以修改ingress-nginx-controller.yaml文件里image字段的仓库地址，我已经把镜像传到我的Docker Hub仓库中：
+
+- tantianran/ingress-controller:v1.6.4
+- tantianran/kube-webhook-certgen:v20220916-gd32f8c343
+
+例如，修改后：
+
+```bash
+tantianran@test-b-k8s-master:~$ egrep "image" ingress-nginx-controller.yaml | grep -v imagePullPolicy
+        image: tantianran/ingress-controller:v1.6.4
+        image: tantianran/kube-webhook-certgen:v20220916-gd32f8c343
+        image: tantianran/kube-webhook-certgen:v20220916-gd32f8c343
+```
+
+安装后查看Pod
+
+```bash
+tantianran@test-b-k8s-master:~$ kubectl get pod -n ingress-nginx
+NAME                                        READY   STATUS      RESTARTS      AGE
+ingress-nginx-admission-create-z4hlb        0/1     Completed   0             47h
+ingress-nginx-admission-patch-ffbwz         0/1     Completed   0             47h
+ingress-nginx-controller-5f4c9fdd9b-l55ch   1/1     Running     1 (10m ago)   47h
+```
+
+- ingress-nginx-controller是Ingress-nginx的控制器组件，它负责监视Kubernetes API server上的Ingress对象，并根据配置动态地更新Nginx配置文件，实现HTTP(S)的负载均衡和路由。
+- ingress-nginx-admission-create和ingress-nginx-admission-patch都是Kubernetes Admission Controller，它们不是一直处于运行状态的容器，而是根据需要动态地生成和销毁。这些Admission Controller在Kubernetes中以Deployment的方式进行部署，因此，它们的Pod将根据副本数创建多个副本，并根据负载和需要动态地生成和销毁。
