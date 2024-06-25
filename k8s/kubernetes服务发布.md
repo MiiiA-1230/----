@@ -307,7 +307,7 @@ $ kubectl get svc -n kube-system
 
 ### **2、Service的负载均衡机制**
 
-​		简介：==当一个Service对象在Kubernetes集群中被定义出来时，集群内的客 户端应用就可以通过服务IP访问到具体的Pod容器提供的服务了。从服 务IP到后端Pod的负载均衡机制，则是由每个Node上的kube-proxy负责实现的。对kube-proxy的代理模式、会话保持机制和基于拓扑感知 的服务路由机制（EndpointSlices）。==
+​		简介：当一个Service对象在Kubernetes集群中被定义出来时，集群内的客户端应用就可以通过服务IP访问到具体的Pod容器提供的服务了。从服 务IP到后端Pod的负载均衡机制，则是由每个Node上的kube-proxy负责实现的。对kube-proxy的代理模式、会话保持机制和基于拓扑感知 的服务路由机制（EndpointSlices）。
 
 #### **2.1 kube-proxy的代理模式**
 
@@ -634,7 +634,7 @@ webapp       172.168.113.132:80,172.168.113.133:80,172.168.113.134:80   4h39m
 
 #### 5.1 前言
 
-​	根据前面对Service概念的说明，我们知道Service的表现形式为IP地址和端口号（ClusterIP:Port），即工作在TCP/IP层。而对于基于HTTP 的服务来说，不同的URL地址经常对应到不同的后端服务或者虚拟服务器（Virtual Host），这些应用层的转发机制仅通过Kubernetes的Service机制是无法实现的。Kubernetes从1.1版本开始引入Ingress资源对象，用 于将Kubernetes集群外的客户端请求路由到集群内部的服务上，同时提供7层（HTTP和HTTPS）路由功能。Ingress在Kubernetes 1.19版本时达 到v1稳定版本。 Kubernetes使用了一个Ingress策略定义和一个具体提供转发服务的Ingress Controller，两者结合，实现了基于灵活Ingress策略定义的服务路由功能。如果是对Kubernetes集群外部的客户端提供服务，那么Ingress Controller实现的是类似于边缘路由器的功能。需要注意的是，Ingress只能以HTTP和HTTPS提供服务，对于使用其他网络协议的服务，可以通过设置Service的类型（type）为NodePort或LoadBalancer 对集群外部的客户端提供服务。 `使用Ingress进行服务路由时，Ingress Controller基于Ingress规则将客户端请求直接转发到Service对应的后端Endpoint（Pod）上，这样会跳过kube-proxy设置的路由转发规则，以提高网络转发效率。`
+​	根据前面对Service概念的说明，我们知道Service的表现形式为IP地址和端口号（ClusterIP:Port），即工作在TCP/IP层。而对于基于HTTP 的服务来说，不同的URL地址经常对应到不同的后端服务或者虚拟服务器（Virtual Host），这些应用层的转发机制仅通过Kubernetes的Service机制是无法实现的。Kubernetes从1.1版本开始引入Ingress资源对象，用 于将Kubernetes集群外的客户端请求路由到集群内部的服务上，同时提供7层（HTTP和HTTPS）路由功能。Ingress在Kubernetes 1.19版本时达到v1稳定版本。Kubernetes使用了一个Ingress策略定义和一个具体提供转发服务的Ingress Controller，两者结合，实现了基于灵活Ingress策略定义的服务路由功能。如果是对Kubernetes集群外部的客户端提供服务，那么Ingress Controller实现的是类似于边缘路由器的功能。需要注意的是，Ingress只能以HTTP和HTTPS提供服务，对于使用其他网络协议的服务，可以通过设置Service的类型（type）为NodePort或LoadBalancer 对集群外部的客户端提供服务。 `使用Ingress进行服务路由时，Ingress Controller基于Ingress规则将客户端请求直接转发到Service对应的后端Endpoint（Pod）上，这样会跳过kube-proxy设置的路由转发规则，以提高网络转发效率。`
 ​	Ingress为Kubernetes集群中的服务提供了入口，可以提供负载均衡、SSL终止和基于名称的虚拟主机，应用的灰度发布等功能；在生产环境中常用的Ingress有Nginx、HAProxy、Istio等。[Ingress](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/#ingress-v1beta1-networking-k8s-io) 公开从集群外部到集群内[服务](https://kubernetes.io/zh-cn/docs/concepts/services-networking/service/)的 HTTP 和 HTTPS 路由。 流量路由由 Ingress 资源上定义的规则控制。
 
 ![image-20240623144722857](https://hjmimage.oss-cn-zhangjiakou.aliyuncs.com/202406231447037.png)
