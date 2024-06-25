@@ -1,6 +1,6 @@
 # Kubernetes使用心得
 
-### 零散随笔
+## 零散随笔
 
 1. 在声明namespace、deploy、sts时，需要注意其命名规则
 1. spec，意为规范，指期望该资源所能达到的状态
@@ -280,6 +280,8 @@ spec:
 
 - **污点（容忍）调度：Taints、Toleration**
 
+​		**污点（Taints）：**
+
 ​		前面的调度方式都是站在Pod的角度上，通过在Pod上添加属性来确定Pod是否要调度到指定的Node上。而我们也可以站在Node的角度上，通过在Node上添加污点属性，来决定是否允许Pod调度过来。
 
 ​		Node被设置上了污点就和Pod之间增加了一层互斥关系，进而拒绝Pod调度进来，甚至可以将已存在的Pod驱逐出去。
@@ -292,7 +294,45 @@ effect选项：
 - **NoSchedule：**新的不要来，旧的不用动
 - **NoExecute：**新的不要来，旧的也得走
 
-### 二、Deployment
+```bash
+#三种添加污点和去除污点的方式
+kubectl taint nodes n1 tag=heima:PreferNoschedule
+kubectl taint nodes n1 tag:PreferNoschedule-
+
+kubectl taint nodes n1 tag=heima:NoSchedule
+kubectl taint nodes n1 tag:NoSchedule-
+
+kubectl taint nodes n1 tag=heima:NoExecute
+kubectl taint nodes n1 tag:NoExecute-
+```
+
+
+
+​		**容忍（Toleration）：**
+
+​		上面污点的作用是拒绝Pod容器被调度到Node节点上，但如果就是想将一个Pod容器调度到有污点的Node节点上去时，就需要使用容忍。
+
+```yaml
+#对应上文的污点操作
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+  tolerations:	#添加容忍
+  - key: "tag"	#要容忍的污点key
+    operator: "Equal"	#操作符
+    value: "heima"	#容忍的污点的value
+    effect: "NoExecute"	#添加容忍的规则，这里必须和标记的污点规则相同
+```
+
+### 二、资源管理器
+
+#### Deployment
 
 ​		意为无状态资源管理。无状态服务，即用户的交互对服务本身数据不造成影响的服务。
 
@@ -331,7 +371,7 @@ spec:  # 定义Deployment的详细规格
         - containerPort: 80 # 容器的端口
 ```
 
-### 三、StatefulSet
+#### StatefulSet
 
 ​		意为有状态服务管理器。有状态服务，即用户交互会产生数据并持久化到etcd中，影响后续服务状态。在创建服务集群时需要事先规划好，否则Pod之间会相互影响导致故障。
 
@@ -382,7 +422,7 @@ spec:
           name: web
 ```
 
-### 四、DaemonSet守护进程集
+#### DaemonSet守护进程集
 
 ​		它在符合匹配条件的节点上均部署一个Pod。当有新节点加入集群时，也会为它们新增一个Pod，当节点从集群中移除时，这些Pod也会被回收，删除DaemonSet将会删除它创建的所有Pod。
 
@@ -413,7 +453,7 @@ spec:
         name: nginx
 ```
 
-### 五、Service
+### 三、Service
 
 ​		主要是为Pod提供一个稳定不变的IP地址，自带负载均衡机制。
 
