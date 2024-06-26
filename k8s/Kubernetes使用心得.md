@@ -279,9 +279,9 @@ spec:
       topologyKey: kubernetes.io/hostname
 ```
 
-#### **污点（容忍）调度：Taints、Toleration**
+##### **污点（容忍）调度：Taints、Toleration**
 
-##### 		**污点（Taints）：**
+###### 		**污点（Taints）：**
 
 ​		前面的调度方式都是站在Pod的角度上，通过在Pod上添加属性来确定Pod是否要调度到指定的Node上。而我们也可以站在Node的角度上，通过在Node上添加污点属性，来决定是否允许Pod调度过来。
 
@@ -307,7 +307,7 @@ kubectl taint nodes n1 tag=heima:NoExecute
 kubectl taint nodes n1 tag:NoExecute-
 ```
 
-##### 		**容忍（Toleration）：**
+###### 		**容忍（Toleration）：**
 
 ​		上面污点的作用是拒绝Pod容器被调度到Node节点上，但如果就是想将一个Pod容器调度到有污点的Node节点上去时，就需要使用容忍。
 
@@ -616,3 +616,251 @@ ingress-nginx-controller-5f4c9fdd9b-l55ch   1/1     Running     1 (10m ago)   47
 
 - ingress-nginx-controller是Ingress-nginx的控制器组件，它负责监视Kubernetes API server上的Ingress对象，并根据配置动态地更新Nginx配置文件，实现HTTP(S)的负载均衡和路由。
 - ingress-nginx-admission-create和ingress-nginx-admission-patch都是Kubernetes Admission Controller，它们不是一直处于运行状态的容器，而是根据需要动态地生成和销毁。这些Admission Controller在Kubernetes中以Deployment的方式进行部署，因此，它们的Pod将根据副本数创建多个副本，并根据负载和需要动态地生成和销毁。
+
+------
+
+[https://developer.aliyun.com/article/1211835]: 可以参考该资料创建流程
+
+https://blog.csdn.net/g18515520928y/article/details/128924713中的样例：
+
+1、环境准备，搭建ingress环境
+
+```bash
+# 创建文件夹
+[root@k8s-master01 ~]# mkdir ingress-controller
+[root@k8s-master01 ~]# cd ingress-controller/
+
+# 获取ingress-nginx，本次案例使用的是0.30版本
+[root@k8s-master01 ingress-controller]# wget https://raw.githubusercontent.com/kubernetes/ingress-nginx/nginx-0.30.0/deploy/static/mandatory.yaml
+[root@k8s-master01 ingress-controller]# wget https://raw.githubusercontent.com/kubernetes/ingress-nginx/nginx-0.30.0/deploy/static/provider/baremetal/service-nodeport.yaml
+
+# 修改mandatory.yaml文件中的仓库
+# 修改quay.io/kubernetes-ingress-controller/nginx-ingress-controller:0.30.0
+# 为quay-mirror.qiniu.com/kubernetes-ingress-controller/nginx-ingress-controller:0.30.0
+# 创建ingress-nginx
+[root@k8s-master01 ingress-controller]# kubectl apply -f ./
+
+# 查看ingress-nginx
+[root@k8s-master01 ingress-controller]# kubectl get pod -n ingress-nginx
+NAME                                           READY   STATUS    RESTARTS   AGE
+pod/nginx-ingress-controller-fbf967dd5-4qpbp   1/1     Running   0          12h
+
+# 查看service
+[root@k8s-master01 ingress-controller]# kubectl get svc -n ingress-nginx
+NAME            TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)                      AGE
+ingress-nginx   NodePort   10.98.75.163   <none>        80:32240/TCP,443:31335/TCP   11h
+```
+
+2、创建tomcat-nginx.yaml
+
+```bash
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: dev
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx-pod
+  template:
+    metadata:
+      labels:
+        app: nginx-pod
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.17.1
+        ports:
+        - containerPort: 80
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tomcat-deployment
+  namespace: dev
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: tomcat-pod
+  template:
+    metadata:
+      labels:
+        app: tomcat-pod
+    spec:
+      containers:
+      - name: tomcat
+        image: tomcat:8.5-jre10-slim
+        ports:
+        - containerPort: 8080
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  namespace: dev
+spec:
+  selector:
+    app: nginx-pod
+  clusterIP: None
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: tomcat-service
+  namespace: dev
+spec:
+  selector:
+    app: tomcat-pod
+  clusterIP: None
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+```
+
+```bash
+# 创建
+[root@k8s-master01 ~]# kubectl create -f tomcat-nginx.yaml
+
+# 查看
+[root@k8s-master01 ~]# kubectl get svc -n dev
+NAME             TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
+nginx-service    ClusterIP   None         <none>        80/TCP     48s
+tomcat-service   ClusterIP   None         <none>        8080/TCP   48s
+```
+
+3、Http代理：创建ingress-http.yaml
+
+```bash
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-http
+  namespace: dev
+spec:
+  rules:
+  - host: nginx.itheima.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: nginx-service
+          servicePort: 80
+  - host: tomcat.itheima.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: tomcat-service
+          servicePort: 8080
+```
+
+```bash
+# 创建
+[root@k8s-master01 ~]# kubectl create -f ingress-http.yaml
+ingress.extensions/ingress-http created
+
+# 查看
+[root@k8s-master01 ~]# kubectl get ing ingress-http -n dev
+NAME           HOSTS                                  ADDRESS   PORTS   AGE
+ingress-http   nginx.itheima.com,tomcat.itheima.com             80      22s
+
+# 查看详情
+[root@k8s-master01 ~]# kubectl describe ing ingress-http  -n dev
+...
+Rules:
+Host                Path  Backends
+----                ----  --------
+nginx.itheima.com   / nginx-service:80 (10.244.1.96:80,10.244.1.97:80,10.244.2.112:80)
+tomcat.itheima.com  / tomcat-service:8080(10.244.1.94:8080,10.244.1.95:8080,10.244.2.111:8080)
+...
+
+# 接下来,在本地电脑上配置host文件,解析上面的两个域名到192.168.109.100(master)上
+# 然后,就可以分别访问tomcat.itheima.com:32240  和  nginx.itheima.com:32240 查看效果了
+```
+
+4、Https代理：
+
+创建证书
+
+```bash
+# 生成证书
+openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -keyout tls.key -out tls.crt -subj "/C=CN/ST=BJ/L=BJ/O=nginx/CN=itheima.com"
+
+# 创建密钥
+kubectl create secret tls tls-secret --key tls.key --cert tls.crt
+```
+
+创建ingress-https.yaml
+
+```bash
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-https
+  namespace: dev
+spec:
+  tls:
+    - hosts:
+      - nginx.itheima.com
+      - tomcat.itheima.com
+      secretName: tls-secret # 指定秘钥
+  rules:
+  - host: nginx.itheima.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: nginx-service
+          servicePort: 80
+  - host: tomcat.itheima.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: tomcat-service
+          servicePort: 8080
+```
+
+```bash
+# 创建
+[root@k8s-master01 ~]# kubectl create -f ingress-https.yaml
+ingress.extensions/ingress-https created
+
+# 查看
+[root@k8s-master01 ~]# kubectl get ing ingress-https -n dev
+NAME            HOSTS                                  ADDRESS         PORTS     AGE
+ingress-https   nginx.itheima.com,tomcat.itheima.com   10.104.184.38   80, 443   2m42s
+
+# 查看详情
+[root@k8s-master01 ~]# kubectl describe ing ingress-https -n dev
+...
+TLS:
+  tls-secret terminates nginx.itheima.com,tomcat.itheima.com
+Rules:
+Host              Path Backends
+----              ---- --------
+nginx.itheima.com  /  nginx-service:80 (10.244.1.97:80,10.244.1.98:80,10.244.2.119:80)
+tomcat.itheima.com /  tomcat-service:8080(10.244.1.99:8080,10.244.2.117:8080,10.244.2.120:8080)
+...
+
+# 下面可以通过浏览器访问https://nginx.itheima.com:31335 和 https://tomcat.itheima.com:31335来查看了
+```
+
+
+
+### 四、数据存储
+
