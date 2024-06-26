@@ -860,7 +860,304 @@ tomcat.itheima.com /  tomcat-service:8080(10.244.1.99:8080,10.244.2.117:8080,10.
 # 下面可以通过浏览器访问https://nginx.itheima.com:31335 和 https://tomcat.itheima.com:31335来查看了
 ```
 
-
-
 ### 四、数据存储
 
+​		在前面已经提到，容器的生命周期可能很短，会被频繁地创建和销毁。那么容器在销毁时，保存在容器中的数据也会被清除。这种结果对用户来说，在某些情况下是不乐意看到的。为了持久化保存容器的数据，kubernetes引入了Volume的概念。
+
+​		Volume是Pod中能够被多个容器访问的共享目录，它被定义在Pod上，然后被一个Pod里的多个容器挂载到具体的文件目录下，kubernetes通过Volume实现同一个Pod中不同容器之间的数据共享以及数据的持久化存储。Volume的生命容器不与Pod中单个容器的生命周期相关，当容器终止或者重启时，Volume中的数据也不会丢失。
+
+​		kubernetes的Volume支持多种类型，比较常见的有下面几个：
+
+- 简单存储：EmptyDir、HostPath、NFS
+- 高级存储：PV、PVC
+- 配置存储：ConfigMap、Secret
+
+#### 1、基本存储
+
+##### 1.1 EmptyDir
+
+​		EmptyDir是最基础的Volume类型，一个EmptyDir就是Host上的一个空目录。EmptyDir是在Pod被分配到Node时创建的，它的初始内容为空，并且无须指定宿主机上对应的目录文件。因为Kubernetes会自动分配一个目录，当Pod销毁时，EmptyDir中的数据也会被永久删除。
+
+EmptyDir的主要用途有：
+
+- 临时空间，例如用于某些应用程序运行时所需的临时目录，且无须保留
+- 一个容器需要从另一个容器中获取数据的目录（多容器共享目录）
+
+创建一个volume-emptydir.yaml
+
+```bash
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-emptydir
+  namespace: dev
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.17.1
+    ports:
+    - containerPort: 80
+    volumeMounts:  # 将logs-volume挂在到nginx容器中，对应的目录为 /var/log/nginx
+    - name: logs-volume
+      mountPath: /var/log/nginx
+  - name: busybox
+    image: busybox:1.30
+    command: ["/bin/sh","-c","tail -f /logs/access.log"] # 初始命令，动态读取指定文件中内容
+    volumeMounts:  # 将logs-volume 挂在到busybox容器中，对应的目录为 /logs
+    - name: logs-volume
+      mountPath: /logs
+  volumes: # 声明volume， name为logs-volume，类型为emptyDir
+  - name: logs-volume
+    emptyDir: {}
+
+
+# 创建Pod
+[root@k8s-master01 ~]# kubectl create -f volume-emptydir.yaml
+pod/volume-emptydir created
+
+# 查看pod
+[root@k8s-master01 ~]# kubectl get pods volume-emptydir -n dev -o wide
+NAME                  READY   STATUS    RESTARTS   AGE      IP       NODE   ...... 
+volume-emptydir       2/2     Running   0          97s   10.42.2.9   node1  ......
+
+# 通过podIp访问nginx
+[root@k8s-master01 ~]# curl 10.42.2.9
+......
+
+# 通过kubectl logs命令查看指定容器的标准输出
+[root@k8s-master01 ~]# kubectl logs -f volume-emptydir -n dev -c busybox
+10.42.1.0 - - [27/Jun/2021:15:08:54 +0000] "GET / HTTP/1.1" 200 612 "-" "curl/7.29.0" "-"
+```
+
+##### 1.2 HostPath
+
+​		HostPath就是将主机中一个实际目录挂载到Pod中供容器使用，这样的设计可以保证Pod销毁了，但数据依旧可以存在于Node主机上。
+
+创建一个volume-hostpath.yaml
+
+```bash
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-hostpath
+  namespace: dev
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.17.1
+    ports:
+    - containerPort: 80
+    volumeMounts:
+    - name: logs-volume
+      mountPath: /var/log/nginx
+  - name: busybox
+    image: busybox:1.30
+    command: ["/bin/sh","-c","tail -f /logs/access.log"]
+    volumeMounts:
+    - name: logs-volume
+      mountPath: /logs
+  volumes:
+  - name: logs-volume
+    hostPath: 
+      path: /root/logs
+      type: DirectoryOrCreate  # 目录存在就使用，不存在就先创建后使用
+```
+
+```
+关于type的值的一点说明：
+    DirectoryOrCreate 目录存在就使用，不存在就先创建后使用
+    Directory   目录必须存在
+    FileOrCreate  文件存在就使用，不存在就先创建后使用
+    File 文件必须存在 
+    Socket  unix套接字必须存在
+    CharDevice  字符设备必须存在
+    BlockDevice 块设备必须存在
+```
+
+```bash
+# 创建Pod
+[root@k8s-master01 ~]# kubectl create -f volume-hostpath.yaml
+pod/volume-hostpath created
+
+# 查看Pod
+[root@k8s-master01 ~]# kubectl get pods volume-hostpath -n dev -o wide
+NAME                  READY   STATUS    RESTARTS   AGE   IP             NODE   ......
+pod-volume-hostpath   2/2     Running   0          16s   10.42.2.10     node1  ......
+
+#访问nginx
+[root@k8s-master01 ~]# curl 10.42.2.10
+
+[root@k8s-master01 ~]# kubectl logs -f volume-emptydir -n dev -c busybox
+
+# 接下来就可以去host的/root/logs目录下查看存储的文件了
+###  注意: 下面的操作需要到Pod所在的节点运行（案例中是node1）
+[root@node1 ~]# ls /root/logs/
+access.log  error.log
+
+# 同样的道理，如果在此目录下创建一个文件，到容器中也是可以看到的
+```
+
+##### 1.3 NFS
+
+​		HostPath可以解决数据持久化的问题，但如果Node节点故障了，Pod转移到了别的节点，又会出现问题。此时就需要准备单独的网络存储系统，比较常用的就是NFS和CIFS。
+
+​		NFS是一个网络文件系统，可以搭建一台NFS服务器，然后将Pod中的存储直接连接到NFS系统上。这样的话，无论Pod在节点中怎么转移，只要Node和NFS的对接没问题，数据就可以访问。
+
+demo：
+
+（1）首先要准备nfs服务器
+
+```bash
+# 在nfs上安装nfs服务
+[root@nfs ~]# yum install nfs-utils -y
+
+# 准备一个共享目录
+[root@nfs ~]# mkdir /root/data/nfs -pv
+
+# 将共享目录以读写权限暴露给192.168.5.0/24网段中的所有主机
+[root@nfs ~]# vim /etc/exports
+[root@nfs ~]# more /etc/exports
+/root/data/nfs     192.168.5.0/24(rw,no_root_squash)
+
+# 启动nfs服务
+[root@nfs ~]# systemctl restart nfs
+```
+
+（2）接下来，要在每个Node节点上都安装nfs来保证节点可以驱动nfs设备
+
+```bash
+# 在node上安装nfs服务，注意不需要启动
+[root@k8s-master01 ~]# yum install nfs-utils -y
+```
+
+（3）之后就可以编写Pod的配置文件了，创建volume-nfs.yaml
+
+```bash
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-nfs
+  namespace: dev
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.17.1
+    ports:
+    - containerPort: 80
+    volumeMounts:
+    - name: logs-volume
+      mountPath: /var/log/nginx
+  - name: busybox
+    image: busybox:1.30
+    command: ["/bin/sh","-c","tail -f /logs/access.log"] 
+    volumeMounts:
+    - name: logs-volume
+      mountPath: /logs
+  volumes:
+  - name: logs-volume
+    nfs:
+      server: 192.168.5.6  #nfs服务器地址
+      path: /root/data/nfs #共享文件路径
+```
+
+（4）最后，运行下Pod，观察结果
+
+```bash
+# 创建pod
+[root@k8s-master01 ~]# kubectl create -f volume-nfs.yaml
+pod/volume-nfs created
+
+# 查看pod
+[root@k8s-master01 ~]# kubectl get pods volume-nfs -n dev
+NAME                  READY   STATUS    RESTARTS   AGE
+volume-nfs        2/2     Running   0          2m9s
+
+# 查看nfs服务器上的共享目录，发现已经有文件了
+[root@k8s-master01 ~]# ls /root/data/
+access.log  error.log
+```
+
+#### 2、高级存储
+
+​		由于kubernetes支持的存储系统有很多，要求客户全都掌握，显然不现实。为了能够屏蔽底层存储实现的细节，方便用户使用， kubernetes引入PV和PVC两种资源对象。
+
+- PV（Persistent Volume）是持久化卷，是对底层的共享机制的一种抽象。一般情况下PV由kubernetes管理员进行创建和配置，他与底层具体的共享存储技术有关，并通过插件完成与共享存储的对接。
+- PVC（Persistent Volume Claim）是持久卷声明，是用户对于存储需求的一种声明。换句话说，PVC其实就是用户向kubernetes系统发出的一种资源需求申请。
+
+使用PV和PVC之后，工作可以得到进一步的细分：
+
+- 存储：由存储工程师维护
+- PV：kubernetes管理员维护
+- PVC：kubernetes用户维护
+
+##### 2.1 PV
+
+PV是存储资源的抽象，下面是资源清单文件：
+
+```yaml
+apiVersion: v1  
+kind: PersistentVolume
+metadata:
+  name: pv2
+spec:
+  nfs: # 存储类型，与底层真正存储对应
+  capacity:  # 存储能力，目前只支持存储空间的设置
+    storage: 2Gi
+  accessModes:  # 访问模式
+  storageClassName: # 存储类别
+  persistentVolumeReclaimPolicy: # 回收策略
+```
+
+PV的关键配置参数说明：
+
+- **存储类型：**
+
+  底层实际存储的类型，kubernetes支持多种存储类型的配置都有所差异
+
+- **存储能力：**
+
+  目前只支持存储空间的设置（storage=1Gi），不过未来可能会加入IOPS、吞吐量等指标的配置
+
+- **访问模式：**
+
+  用于描述用户应对存储资源的访问权限，访问权限包括下面几种方式：
+
+  ①ReadWriteOnce（RWO）：读写权限，只能被单个节点挂载
+
+  ②ReadOnlyMany（ROX）：只读权限，可以被多个节点挂载
+
+  ③ReadWriteMany（RWX）：读写权限，可以被多个节点挂载
+
+  `需要注意的是，底层不同的存储类型可能支持的访问模式不同`
+
+- **回收策略**：
+
+  当PV不在被使用之后，有三种处理策略：
+
+  ①Retain（保留）：保留数据，需要管理员手工清理数据
+
+  ②Recycle(回收)：清除PV中的数据，效果相当于执行`rm -rf /thevolume/*`
+
+  ③Delete(删除)：与PV相连的后端存储完成Volume的删除操作，当然这常见于云服务商的存储服务
+
+  `需要注意的是，底层不同的存储类型可能支持的回收策略不同`
+
+- **存储类别**：
+
+  PV可以通过storageClassName参数指定一个存储类别
+
+  ①具有特定类别的PV只能与请求了该类别的PVC进行绑定
+
+  ②未设定类别的PV则只能与不请求任何类别的PVC进行绑定
+
+- **状态**：
+
+  一个PV的生命周期中，可能会处于四种不同阶段：
+
+  ①Available（可用）：表示可用状态，还未被任何PVC绑定
+
+  ②Bound（已绑定）：表示PV已经被PVC绑定
+
+  ③Released（已释放）：表示PVC被删除，但是资源还未被集群重新声明
+
+  ④Failed（失败）：表示该PV的自动回收失败
