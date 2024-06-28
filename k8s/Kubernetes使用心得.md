@@ -864,6 +864,8 @@ tomcat.itheima.com /  tomcat-service:8080(10.244.1.99:8080,10.244.2.117:8080,10.
 
 ### 四、数据存储
 
+#### 1、基本存储
+
 
 ##### 1.1 EmptyDir
 
@@ -1101,54 +1103,526 @@ spec:
 
 PV的关键配置参数说明：
 
-- **存储类型：**
+**存储类型：**
 
-  底层实际存储的类型，kubernetes支持多种存储类型的配置都有所差异
+底层实际存储的类型，kubernetes支持多种存储类型的配置都有所差异
 
-- **存储能力：**
+**存储能力：**
 
-  目前只支持存储空间的设置（storage=1Gi），不过未来可能会加入IOPS、吞吐量等指标的配置
+目前只支持存储空间的设置（storage=1Gi），不过未来可能会加入IOPS、吞吐量等指标的配置
 
-- **访问模式：**
+**访问模式：**
 
-  用于描述用户应对存储资源的访问权限，访问权限包括下面几种方式：
+用于描述用户应对存储资源的访问权限，访问权限包括下面几种方式：
 
-  ①ReadWriteOnce（RWO）：读写权限，只能被单个节点挂载
+①ReadWriteOnce（RWO）：读写权限，只能被单个节点挂载
 
-  ②ReadOnlyMany（ROX）：只读权限，可以被多个节点挂载
+②ReadOnlyMany（ROX）：只读权限，可以被多个节点挂载
 
-  ③ReadWriteMany（RWX）：读写权限，可以被多个节点挂载
+③ReadWriteMany（RWX）：读写权限，可以被多个节点挂载
 
-  `需要注意的是，底层不同的存储类型可能支持的访问模式不同`
+`需要注意的是，底层不同的存储类型可能支持的访问模式不同`
 
-- **回收策略**：
+**回收策略**：
 
-  当PV不在被使用之后，有三种处理策略：
+当PV不在被使用之后，有三种处理策略：
 
-  ①Retain（保留）：保留数据，需要管理员手工清理数据
+①Retain（保留）：保留数据，需要管理员手工清理数据
 
-  ②Recycle(回收)：清除PV中的数据，效果相当于执行`rm -rf /thevolume/*`
+②Recycle(回收)：清除PV中的数据，效果相当于执行`rm -rf /thevolume/*`
 
-  ③Delete(删除)：与PV相连的后端存储完成Volume的删除操作，当然这常见于云服务商的存储服务
+③Delete(删除)：与PV相连的后端存储完成Volume的删除操作，当然这常见于云服务商的存储服务
 
-  `需要注意的是，底层不同的存储类型可能支持的回收策略不同`
+`需要注意的是，底层不同的存储类型可能支持的回收策略不同`
 
-- **存储类别**：
+**存储类别**：
 
-  PV可以通过storageClassName参数指定一个存储类别
+PV可以通过storageClassName参数指定一个存储类别
 
-  ①具有特定类别的PV只能与请求了该类别的PVC进行绑定
+①具有特定类别的PV只能与请求了该类别的PVC进行绑定
 
-  ②未设定类别的PV则只能与不请求任何类别的PVC进行绑定
+②未设定类别的PV则只能与不请求任何类别的PVC进行绑定
 
-- **状态**：
+**状态**：
 
-  一个PV的生命周期中，可能会处于四种不同阶段：
+一个PV的生命周期中，可能会处于四种不同阶段：
 
-  ①Available（可用）：表示可用状态，还未被任何PVC绑定
+①Available（可用）：表示可用状态，还未被任何PVC绑定
 
-  ②Bound（已绑定）：表示PV已经被PVC绑定
+②Bound（已绑定）：表示PV已经被PVC绑定
 
-  ③Released（已释放）：表示PVC被删除，但是资源还未被集群重新声明
+③Released（已释放）：表示PVC被删除，但是资源还未被集群重新声明
 
-  ④Failed（失败）：表示该PV的自动回收失败
+④Failed（失败）：表示该PV的自动回收失败
+
+**实验**
+
+1.准备NFS环境
+
+```bash
+# 创建目录
+[root@nfs ~]# mkdir /root/data/{pv1,pv2,pv3} -pv
+
+# 暴露服务
+[root@nfs ~]# more /etc/exports
+/root/data/pv1     192.168.5.0/24(rw,no_root_squash)
+/root/data/pv2     192.168.5.0/24(rw,no_root_squash)
+/root/data/pv3     192.168.5.0/24(rw,no_root_squash)
+
+# 重启服务
+[root@nfs ~]#  systemctl restart nfs
+```
+
+2.创建pv.yaml
+
+```bash
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name:  pv1
+spec:
+  capacity: 
+    storage: 1Gi
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    path: /root/data/pv1
+    server: 192.168.5.6
+
+---
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name:  pv2
+spec:
+  capacity: 
+    storage: 2Gi
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    path: /root/data/pv2
+    server: 192.168.5.6
+    
+---
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name:  pv3
+spec:
+  capacity: 
+    storage: 3Gi
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    path: /root/data/pv3
+    server: 192.168.5.6
+```
+
+```bash
+# 创建 pv
+[root@k8s-master01 ~]# kubectl create -f pv.yaml
+persistentvolume/pv1 created
+persistentvolume/pv2 created
+persistentvolume/pv3 created
+
+# 查看pv
+[root@k8s-master01 ~]# kubectl get pv -o wide
+NAME   CAPACITY   ACCESS MODES  RECLAIM POLICY  STATUS      AGE   VOLUMEMODE
+pv1    1Gi        RWX            Retain        Available    10s   Filesystem
+pv2    2Gi        RWX            Retain        Available    10s   Filesystem
+pv3    3Gi        RWX            Retain        Available    9s    Filesystem
+```
+
+##### 2.2 PVC
+
+PVC是资源的申请，用来声明对存储空间、访问模式、存储类别需求信息。
+
+资源清单文件如下：
+
+```bash
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc
+  namespace: dev
+spec:
+  accessModes: # 访问模式
+  selector: # 采用标签对PV选择
+  storageClassName: # 存储类别
+  resources: # 请求空间
+    requests:
+      storage: 5Gi
+```
+
+PVC关键配置参数说明：
+
+**访问模式**
+
+用于描述用户应用对存储资源的访问权限
+
+**选择条件**
+
+选择LabelSelector的设置，可使PVC对于系统中已存在的PV进行筛选
+
+**存储类别**
+
+PVC在定义时可以设定需要的后端存储的类别，只有设置了该class的PV才能被系统选出
+
+**资源请求**
+
+描述对存储资源的请求
+
+**实验**
+
+1.创建pvc.yaml，申请pv
+
+```bash
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc1
+  namespace: dev
+spec:
+  accessModes: 
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc2
+  namespace: dev
+spec:
+  accessModes: 
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc3
+  namespace: dev
+spec:
+  accessModes: 
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+```
+
+```bash
+# 创建pvc
+[root@k8s-master01 ~]# kubectl create -f pvc.yaml
+persistentvolumeclaim/pvc1 created
+persistentvolumeclaim/pvc2 created
+persistentvolumeclaim/pvc3 created
+
+# 查看pvc
+[root@k8s-master01 ~]# kubectl get pvc  -n dev -o wide
+NAME   STATUS   VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE   VOLUMEMODE
+pvc1   Bound    pv1      1Gi        RWX                           15s   Filesystem
+pvc2   Bound    pv2      2Gi        RWX                           15s   Filesystem
+pvc3   Bound    pv3      3Gi        RWX                           15s   Filesystem
+
+# 查看pv
+[root@k8s-master01 ~]# kubectl get pv -o wide
+NAME  CAPACITY ACCESS MODES  RECLAIM POLICY  STATUS    CLAIM       AGE     VOLUMEMODE
+pv1    1Gi        RWx        Retain          Bound    dev/pvc1    3h37m    Filesystem
+pv2    2Gi        RWX        Retain          Bound    dev/pvc2    3h37m    Filesystem
+pv3    3Gi        RWX        Retain          Bound    dev/pvc3    3h37m    Filesystem   
+```
+
+2.创建pods.yaml，使用pv
+
+```bash
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod1
+  namespace: dev
+spec:
+  containers:
+  - name: busybox
+    image: busybox:1.30
+    command: ["/bin/sh","-c","while true;do echo pod1 >> /root/out.txt; sleep 10; done;"]
+    volumeMounts:
+    - name: volume
+      mountPath: /root/
+  volumes:
+    - name: volume
+      persistentVolumeClaim:
+        claimName: pvc1
+        readOnly: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod2
+  namespace: dev
+spec:
+  containers:
+  - name: busybox
+    image: busybox:1.30
+    command: ["/bin/sh","-c","while true;do echo pod2 >> /root/out.txt; sleep 10; done;"]
+    volumeMounts:
+    - name: volume
+      mountPath: /root/
+  volumes:
+    - name: volume
+      persistentVolumeClaim:
+        claimName: pvc2
+        readOnly: false
+```
+
+```bash
+# 创建pod
+[root@k8s-master01 ~]# kubectl create -f pods.yaml
+pod/pod1 created
+pod/pod2 created
+
+# 查看pod
+[root@k8s-master01 ~]# kubectl get pods -n dev -o wide
+NAME   READY   STATUS    RESTARTS   AGE   IP            NODE   
+pod1   1/1     Running   0          14s   10.244.1.69   node1   
+pod2   1/1     Running   0          14s   10.244.1.70   node1  
+
+# 查看pvc
+[root@k8s-master01 ~]# kubectl get pvc -n dev -o wide
+NAME   STATUS   VOLUME   CAPACITY   ACCESS MODES      AGE   VOLUMEMODE
+pvc1   Bound    pv1      1Gi        RWX               94m   Filesystem
+pvc2   Bound    pv2      2Gi        RWX               94m   Filesystem
+pvc3   Bound    pv3      3Gi        RWX               94m   Filesystem
+
+# 查看pv
+[root@k8s-master01 ~]# kubectl get pv -n dev -o wide
+NAME   CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM       AGE     VOLUMEMODE
+pv1    1Gi        RWX            Retain           Bound    dev/pvc1    5h11m   Filesystem
+pv2    2Gi        RWX            Retain           Bound    dev/pvc2    5h11m   Filesystem
+pv3    3Gi        RWX            Retain           Bound    dev/pvc3    5h11m   Filesystem
+
+# 查看nfs中的文件存储
+[root@nfs ~]# more /root/data/pv1/out.txt
+node1
+node1
+[root@nfs ~]# more /root/data/pv2/out.txt
+node2
+node2
+```
+
+##### 2.3 生命周期
+
+PVC和PV是一一对应的，PV和PVC之间的相互作用遵循以下生命周期：
+
+1. **资源供应：**管理员手动创建底层存储和PV
+
+2. **资源绑定：**用户创建PVC，kubernetes负责根据PVC的声明去寻找PV，并绑定
+
+   在用户定义好PVC之后，系统将根据PVC对存储资源的请求在已存在的PV中选择一个满足条件的
+
+- 一旦找到，就将该PV与用户定义的PVC进行绑定，用户的绑定就可以使用这个PVC了
+
+- 如果找不到，PVC则会无限期处于Pending状态，直到等到系统管理员创建了一个符合其要求的PV
+
+  PV一旦绑定到某个PVC上，就会被这个PVC独占，不能再与其他PVC进行绑定了
+
+3. **资源使用：**用户可在pod中像volume一样使用pvc
+
+   Pod使用Volume的定义，将PVC挂载到容器内的某个路径进行使用。
+
+4. **资源释放：**用户删除pvc来释放pv
+
+   当存储资源使用完毕后，用户可以删除PVC，与该PVC绑定的PV将会被标记为“已释放”，但还不能立刻与其他PVC进行绑定。通过之前PVC写入的数据可能还被留在存储设备上，只有在清除之后该PV才能再次使用
+
+5. **资源回收：**kubernetes根据pv设置的回收策略进行资源的回收
+
+   对于PV，管理员可以设定回收策略，用于设置与之绑定的PVC释放资源之后如何处理遗留数据的问题。只有PV的存储空间完成回收，才能供新的PVC绑定和使用
+
+#### 3、配置存储
+
+##### 3.1 ConfigMap
+
+ConfigMap是一种比较特殊的存储卷，他的主要作用是用来存储信息的。
+
+创建configmap.yaml，内容如下：
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configmap
+  namespace: dev
+data:
+  info: |
+    username:admin
+    password:123456
+```
+
+接下来，使用此配置文件创建configmap
+
+```bash
+# 创建configmap
+[root@k8s-master01 ~]# kubectl create -f configmap.yaml
+configmap/configmap created
+
+# 查看configmap详情
+[root@k8s-master01 ~]# kubectl describe cm configmap -n dev
+Name:         configmap
+Namespace:    dev
+Labels:       <none>
+Annotations:  <none>
+
+Data
+====
+info:
+----
+username:admin
+password:123456
+
+Events:  <none>
+```
+
+之后创建一个pod-configmap.yaml，将上面创建的configmap挂载进去
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-configmap
+  namespace: dev
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.17.1
+    volumeMounts: # 将configmap挂载到目录
+    - name: config
+      mountPath: /configmap/config
+  volumes: # 引用configmap
+  - name: config
+    configMap:
+      name: configmap
+```
+
+```bash
+# 创建pod
+[root@k8s-master01 ~]# kubectl create -f pod-configmap.yaml
+pod/pod-configmap created
+
+# 查看pod
+[root@k8s-master01 ~]# kubectl get pod pod-configmap -n dev
+NAME            READY   STATUS    RESTARTS   AGE
+pod-configmap   1/1     Running   0          6s
+
+#进入容器
+[root@k8s-master01 ~]# kubectl exec -it pod-configmap -n dev /bin/sh
+# cd /configmap/config/
+# ls
+info
+# more info
+username:admin
+password:123456
+
+# 可以看到映射已经成功，每个configmap都映射成了一个目录
+# key--->文件     value---->文件中的内容
+# 此时如果更新configmap的内容, 容器中的值也会动态更新
+```
+
+##### 3.2 Secret
+
+在kubernetes中，还存在一种和ConfigMap非常类似的对象，被称为Secret对象。它主要用于存储敏感信息，例如密码、秘钥、证书等等。
+
+1、首先使用base64对数据进行编码
+
+```bash
+[root@k8s-master01 ~]# echo -n 'admin' | base64 #准备username
+YWRtaW4=
+[root@k8s-master01 ~]# echo -n '123456' | base64 #准备password
+MTIzNDU2
+```
+
+2、接下来编写secret.yaml，并创建Secret
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: secret
+  namespace: dev
+type: Opaque
+data:
+  username: YWRtaW4=
+  password: MTIzNDU2
+```
+
+```yaml
+# 创建secret
+[root@k8s-master01 ~]# kubectl create -f secret.yaml
+secret/secret created
+
+# 查看secret详情
+[root@k8s-master01 ~]# kubectl describe secret secret -n dev
+Name:         secret
+Namespace:    dev
+Labels:       <none>
+Annotations:  <none>
+Type:  Opaque
+Data
+====
+password:  6 bytes
+username:  5 bytes
+```
+
+3、创建pod-secret.yaml，将上面创建的secret挂载进去：
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-secret
+  namespace: dev
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.17.1
+    volumeMounts: # 将secret挂载到目录
+    - name: config
+      mountPath: /secret/config
+  volumes:
+  - name: config
+    secret:
+      secretName: secret
+```
+
+```yaml
+# 创建pod
+[root@k8s-master01 ~]# kubectl create -f pod-secret.yaml
+pod/pod-secret created
+
+# 查看pod
+[root@k8s-master01 ~]# kubectl get pod pod-secret -n dev
+NAME            READY   STATUS    RESTARTS   AGE
+pod-secret      1/1     Running   0          2m28s
+
+# 进入容器，查看secret信息，发现已经自动解码了
+[root@k8s-master01 ~]# kubectl exec -it pod-secret /bin/sh -n dev
+/ # ls /secret/config/
+password  username
+/ # more /secret/config/username
+admin
+/ # more /secret/config/password
+123456
+```
+
+至此，已经实现了利用secret对信息进行编码
+
+### 五、安全认证
+
+#### 1、访问控制概述
